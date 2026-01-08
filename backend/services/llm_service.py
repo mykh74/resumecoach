@@ -12,7 +12,10 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from backend.prompts.templates import PromptTemplates
-from backend.models.schema import Resume, JobDescription, CoachingReport, GapAnalysis, StrengthAnalysis
+from backend.models.schema import (
+    Resume, JobDescription, CoachingReport, GapAnalysis, StrengthAnalysis,
+    SkillGap, KeyStrength, ActionRecommendation
+)
 
 # Load environment variables
 load_dotenv()
@@ -145,10 +148,53 @@ class LLMService:
         interview_tips, action_items = self._parse_interview_prep(interview_response)
         
         # Compile the report
+        overall_fit_score = int(fit_score * 10)  # Convert to 0-100 scale
+        
+        # Create structured gaps
+        gaps = [
+            SkillGap(
+                skill_area=skill,
+                severity="medium",
+                impact="Required skill missing",
+                suggestion=f"Develop or highlight {skill}",
+                skill=skill,
+                details=f"Important skill for the role"
+            )
+            for skill in gap_analysis.missing_skills[:10]
+        ]
+        
+        # Create structured strengths
+        strengths = [
+            KeyStrength(
+                skill_area=skill,
+                relevance="high",
+                evidence=["Demonstrated in resume"],
+                how_to_highlight=f"Emphasize {skill} in your application",
+                strength=skill
+            )
+            for skill in strength_analysis.matching_skills[:10]
+        ]
+        
+        # Create structured recommendations
+        recommendations = [
+            ActionRecommendation(
+                action=item,
+                priority="medium",
+                timeline="1-2 weeks",
+                rationale="Will strengthen your application"
+            )
+            for item in action_items[:10]
+        ]
+        
         coaching_report = CoachingReport(
             session_id=session_id,
             fit_score=fit_score,
+            overall_fit_score=overall_fit_score,
+            summary=overall_assessment[:300],
             overall_assessment=overall_assessment,
+            gaps=gaps,
+            strengths=strengths,
+            recommendations=recommendations,
             gap_analysis=gap_analysis,
             strength_analysis=strength_analysis,
             resume_improvements=resume_improvements,
@@ -295,22 +341,72 @@ class LLMService:
         if score_match:
             fit_score = float(score_match.group(1))
         
+        overall_fit_score = int(fit_score * 10)  # Convert to 0-100 scale
+        
+        # Extract summary (first paragraph)
+        summary_match = re.search(r'^(.+?)(?:\n\n|\n#{1,3})', response, re.DOTALL)
+        summary = summary_match.group(1).strip() if summary_match else response[:300]
+        
+        # Create structured gaps from missing skills
+        missing_skills = self._extract_list_from_text(response, "missing", "gap", "lack")
+        gaps = [
+            SkillGap(
+                skill_area=skill,
+                severity="medium",
+                impact=f"Required skill not demonstrated in resume",
+                suggestion=f"Consider highlighting or developing {skill}",
+                skill=skill,
+                details=f"The job requires {skill} but it's not clearly shown in your resume"
+            )
+            for skill in missing_skills[:10]
+        ]
+        
+        # Create structured strengths from matching skills
+        matching_skills = self._extract_list_from_text(response, "strength", "match", "qualified")
+        strengths = [
+            KeyStrength(
+                skill_area=skill,
+                relevance="high",
+                evidence=[f"Demonstrated in resume"],
+                how_to_highlight=f"Emphasize {skill} in your application",
+                strength=skill
+            )
+            for skill in matching_skills[:10]
+        ]
+        
+        # Create structured recommendations
+        action_items = self._extract_list_from_text(response, "action", "recommend", "should")
+        recommendations = [
+            ActionRecommendation(
+                action=action,
+                priority="medium",
+                timeline="1-2 weeks",
+                rationale="Will improve your candidacy"
+            )
+            for action in action_items[:10]
+        ]
+        
         # For simplicity, treat the full response as overall assessment
         # In production, would parse sections more carefully
         return CoachingReport(
             session_id=session_id,
             fit_score=fit_score,
-            overall_assessment=response[:500],  # First part as summary
+            overall_fit_score=overall_fit_score,
+            summary=summary,
+            overall_assessment=response[:500],  # First part as assessment
+            gaps=gaps,
+            strengths=strengths,
+            recommendations=recommendations,
             gap_analysis=GapAnalysis(
-                missing_skills=self._extract_list_from_text(response, "missing", "gap"),
+                missing_skills=missing_skills,
                 recommendations=["Review the detailed analysis below"]
             ),
             strength_analysis=StrengthAnalysis(
-                highlights=self._extract_list_from_text(response, "strength", "match")
+                highlights=matching_skills
             ),
             resume_improvements=self._extract_list_from_text(response, "improve", "recommend"),
             interview_tips=self._extract_list_from_text(response, "interview", "question"),
-            action_items=self._extract_list_from_text(response, "action", "next step"),
+            action_items=action_items,
             general_advice=[response[-200:]],  # Last part as advice
             resume_summary=PromptTemplates._format_resume_summary(resume),
             job_summary=PromptTemplates._format_job_summary(job)

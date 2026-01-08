@@ -80,6 +80,33 @@ class JobDescription(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class SkillGap(BaseModel):
+    """Individual skill gap item."""
+    skill: Optional[str] = None  # Legacy field name
+    skill_area: str
+    severity: str  # "high", "medium", "low"
+    impact: str
+    suggestion: str
+    details: Optional[str] = None
+
+
+class KeyStrength(BaseModel):
+    """Individual strength item."""
+    strength: Optional[str] = None  # Legacy field name
+    skill_area: str
+    relevance: str  # "high", "medium", "low"
+    evidence: List[str] = Field(default_factory=list)
+    how_to_highlight: str
+
+
+class ActionRecommendation(BaseModel):
+    """Individual action recommendation."""
+    action: str
+    priority: str  # "high", "medium", "low"
+    timeline: Optional[str] = None
+    rationale: Optional[str] = None
+
+
 class GapAnalysis(BaseModel):
     """Analysis of gaps between resume and job requirements."""
     missing_skills: List[str] = Field(default_factory=list)
@@ -97,17 +124,24 @@ class StrengthAnalysis(BaseModel):
 
 
 class CoachingReport(BaseModel):
-    """Complete coaching report."""
+    """Complete coaching report with structured analysis."""
     session_id: str
     timestamp: datetime = Field(default_factory=datetime.now)
     
     # Overall assessment
+    overall_fit_score: int = Field(ge=0, le=100, description="Overall fit score (0-100)")
     fit_score: float = Field(ge=0.0, le=10.0, description="Overall fit score (0-10)")
     overall_assessment: str
+    summary: str  # Executive summary
     
-    # Detailed analysis
-    gap_analysis: GapAnalysis
-    strength_analysis: StrengthAnalysis
+    # Structured analysis (API format)
+    gaps: List[SkillGap] = Field(default_factory=list)
+    strengths: List[KeyStrength] = Field(default_factory=list)
+    recommendations: List[ActionRecommendation] = Field(default_factory=list)
+    
+    # Detailed analysis (original format)
+    gap_analysis: Optional[GapAnalysis] = None
+    strength_analysis: Optional[StrengthAnalysis] = None
     
     # Advice sections
     resume_improvements: List[str] = Field(default_factory=list)

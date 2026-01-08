@@ -414,14 +414,23 @@ async def send_chat_message(chat_session_id: str, request: ChatMessageRequest):
             for msg in chat_session["messages"]
         ]
         
+        # Prepare context for LLM (serialize objects to dicts)
+        last_report = session.get("last_report")
+        context = {
+            "resume": session["resume"].model_dump() if hasattr(session["resume"], 'model_dump') else session["resume"],
+            "job_description": session["job_description"].model_dump() if hasattr(session["job_description"], 'model_dump') else session["job_description"],
+            "last_report": last_report.model_dump() if last_report and hasattr(last_report, 'model_dump') else last_report,
+            "session_id": session_id,
+            "summary": last_report.summary if last_report and hasattr(last_report, 'summary') else "",
+            "report_summary": last_report.overall_assessment if last_report and hasattr(last_report, 'overall_assessment') else ""
+        }
+        
         # Generate response
         logger.info(f"Generating chat response for session {chat_session_id}")
         response = llm_service.chat_response(
-            message=request.message,
-            conversation_history=conversation_history,
-            resume=session["resume"],
-            job_description=session["job_description"],
-            session_id=session_id
+            question=request.message,
+            context=context,
+            conversation_history=conversation_history
         )
         
         # Store messages
