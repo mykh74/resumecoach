@@ -42,19 +42,19 @@ class JobParser:
         Returns:
             JobDescription object with structured data
         """
-        # Clean text
-        text = self._clean_text(text)
+        # Extract sections first (needs original formatting with newlines)
+        sections = self._identify_sections(text)
         
-        # Extract basic information
+        # Clean text for storage
+        clean_text = self._clean_text(text)
+        
+        # Extract basic information (use original text for better matching)
         title = self._extract_title(text)
         company = self._extract_company(text)
         location = self._extract_location(text)
         job_type = self._extract_job_type(text)
         experience_level = self._extract_experience_level(text)
         salary_range = self._extract_salary(text)
-        
-        # Extract sections
-        sections = self._identify_sections(text)
         
         # Extract structured data
         summary = self._extract_summary(text, sections.get('about', ''))
@@ -68,7 +68,7 @@ class JobParser:
         benefits = self._extract_benefits(sections.get('benefits', ''))
         
         return JobDescription(
-            raw_text=text,
+            raw_text=clean_text,
             title=title,
             company=company,
             location=location,
@@ -237,13 +237,24 @@ class JobParser:
         
         responsibilities = []
         
-        # Split by bullets, numbers, or newlines
-        items = re.split(r'[•\-\*\n]+|\d+\.', responsibilities_section)
+        # Split by bullets, dashes, asterisks, or numbered lists
+        # First try to split by bullet points and dashes at line starts
+        lines = responsibilities_section.split('\n')
+        for line in lines:
+            line = line.strip()
+            # Remove leading bullets, dashes, asterisks, or numbers
+            line = re.sub(r'^[•\-\*\d+\.\)\s]+', '', line).strip()
+            # Keep lines that are substantial
+            if line and 5 <= len(line) <= 500:
+                responsibilities.append(line)
         
-        for item in items:
-            item = item.strip()
-            if item and 10 <= len(item) <= 500:  # Reasonable length
-                responsibilities.append(item)
+        # If no results, try alternative splitting
+        if not responsibilities:
+            items = re.split(r'[•\-\*]+|\d+\.', responsibilities_section)
+            for item in items:
+                item = item.strip()
+                if item and 5 <= len(item) <= 500:
+                    responsibilities.append(item)
         
         return responsibilities[:15]  # Limit number
     

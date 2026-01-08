@@ -60,11 +60,11 @@ class ResumeParser:
         Returns:
             Resume object with structured data
         """
-        # Clean the text
-        text = self._clean_text(text)
-        
-        # Extract sections
+        # Extract sections first (needs original formatting with newlines)
         sections = self._identify_sections(text)
+        
+        # Clean text for storage
+        clean_text = self._clean_text(text)
         
         # Parse each section
         contact_info = self._extract_contact_info(text, sections.get('contact', ''))
@@ -78,7 +78,7 @@ class ResumeParser:
         languages = self._extract_list_items(sections.get('languages', ''))
         
         return Resume(
-            raw_text=text,
+            raw_text=clean_text,
             contact_info=contact_info,
             summary=summary,
             skills=skills,
@@ -187,14 +187,27 @@ class ResumeParser:
         github = github_match.group(0) if github_match else None
         
         # Name (usually in first few lines)
-        lines = search_text.split('\n')[:5]
+        lines = [l.strip() for l in search_text.split('\n')[:10] if l.strip()]
         name = None
         for line in lines:
-            line = line.strip()
-            # Name is likely a line with 2-4 words, all capitalized, no special chars
-            if 2 <= len(line.split()) <= 4 and re.match(r'^[A-Z][a-zA-Z\s]+$', line):
-                name = line
-                break
+            # Skip lines that look like contact info
+            if '@' in line or 'linkedin' in line.lower() or 'github' in line.lower():
+                continue
+            if '(' in line and ')' in line and any(char.isdigit() for char in line):  # Likely phone number
+                continue
+            if re.search(r'\d{3}[-.\s]\d{3,4}', line):  # Phone pattern
+                continue
+            if line.lower() in ['summary', 'skills', 'experience', 'education', 'contact']:
+                continue
+            
+            # Name is likely a line with 2-4 words, capitalized start, reasonable length
+            words = line.split()
+            if 2 <= len(words) <= 4 and len(line) < 50:
+                # Check if it looks like a name (starts with capital, mostly letters)
+                cleaned_name = line.replace(' ', '').replace('.', '').replace(',', '')
+                if cleaned_name and re.match(r'^[A-Z]', line) and sum(c.isalpha() for c in cleaned_name) >= len(cleaned_name) * 0.7:
+                    name = line
+                    break
         
         return ContactInfo(
             name=name,
