@@ -9,9 +9,7 @@ from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
-from langchain.chains import LLMChain
-from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
-from langchain.schema import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from backend.prompts.templates import PromptTemplates
 from backend.models.schema import Resume, JobDescription, CoachingReport, GapAnalysis, StrengthAnalysis
