@@ -78,3 +78,5 @@ htmlcov/
 
 # Streamlit
 .streamlit/secrets.toml
+
+.history/
