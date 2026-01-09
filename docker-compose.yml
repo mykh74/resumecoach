@@ -1,0 +1,93 @@
+# Docker Compose for local development and testing
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: resumecoach-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./backend:/app/backend
+      - ./prompts:/app/prompts
+      - upload-data:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - resumecoach-network
+
+  # Nginx reverse proxy (optional for local dev)
+  nginx:
+    image: nginx:alpine
+    container_name: resumecoach-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployment/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deployment/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - resumecoach-network
+
+  # PostgreSQL database (optional for production)
+  db:
+    image: postgres:15-alpine
+    container_name: resumecoach-db
+    environment:
+      - POSTGRES_DB=resumecoach
+      - POSTGRES_USER=resumecoach
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeMe123!}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U resumecoach"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - resumecoach-network
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: resumecoach-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - resumecoach-network
+
+volumes:
+  upload-data:
+  postgres-data:
+  redis-data:
+
+networks:
+  resumecoach-network:
+    driver: bridge

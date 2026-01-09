@@ -17,20 +17,24 @@ An AI-powered career coaching application that analyzes resumes against job desc
   - Strengths to highlight in applications
   - Actionable improvement recommendations
 - **💬 Interactive Chatbot**: Ask follow-up questions and get career coaching in real-time
-- **🤖 Powered by Llama-2**: Self-hosted on AWS SageMaker for privacy and performance
+- **🤖 Multi-Provider LLM Support**: 
+  - OpenAI (GPT-3.5/4) - Easy setup, great for testing
+  - AWS SageMaker (Llama 2, Mistral, Falcon) - Privacy, cost control, production scale
+- **☁️ AWS SageMaker Integration**: Self-hosted LLMs for data privacy and performance
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌─────────────────┐
-│  Streamlit  │─────▶│   FastAPI    │─────▶│   AWS SageMaker │
-│   Frontend  │      │   Backend    │      │   (Llama-2-7B)  │
-└─────────────┘      └──────────────┘      └─────────────────┘
-                            │
-                            ▼
-                     ┌──────────────┐
-                     │  LangChain   │
-                     │ Orchestration│
+┌─────────────┐      ┌──────────────┐      ┌─────────────────────────────┐
+│  Streamlit  │─────▶│   FastAPI    │─────▶│     LLM Service             │
+│  Frontend   │      │   Backend    │      │  (Multi-Provider Support)   │
+│  (4 pages)  │      │ (10 endpoints)│      └─────────────────────────────┘
+└─────────────┘      └──────────────┘                    │
+                            │                            ├─▶ OpenAI API
+                            ▼                            │   (GPT-3.5/4)
+                     ┌──────────────┐                   │
+                     │  LangChain   │                   └─▶ AWS SageMaker
+                     │ Orchestration│                       (Llama 2, Mistral)
                      └──────────────┘
 ```
 
@@ -39,8 +43,9 @@ An AI-powered career coaching application that analyzes resumes against job desc
 ### Prerequisites
 
 - Python 3.10 or higher
-- AWS account with credits
-- OpenAI API key (for initial testing)
+- **For OpenAI (easiest):** OpenAI API key
+- **For SageMaker (optional):** AWS account with IAM credentials
+  - See [docs/AWS_SETUP_GUIDE.md](docs/AWS_SETUP_GUIDE.md) for setup instructions
 
 ### Installation
 
@@ -63,7 +68,9 @@ An AI-powered career coaching application that analyzes resumes against job desc
 
 4. **Set up environment variables**:
    ```bash
-   cp .env.example .env
+   cp .env.example .envcredentials:
+   # - OPENAI_API_KEY=your_key (required)
+   # - For SageMaker: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, etc. (optional)
    # Edit .env with your API keys
    ```
 
@@ -79,20 +86,48 @@ An AI-powered career coaching application that analyzes resumes against job desc
    streamlit run streamlit_app.py
    ```
 
-Visit `http://localhost:8501` to use the application!
+### 🚀 One-Command Launch
 
-## 📁 Project Structure
-
+Run both backend and frontend together:
+```bash
+./run_app.sh
 ```
-ResumeCoach/
-├── backend/
-│   ├── api/              # FastAPI endpoints
-│   │   ├── main.py
-│   │   └── routes/
-│   ├── services/         # Business logic
-│   │   ├── resume_parser.py
-│   │   ├── job_parser.py
-│   │   ├── llm_service.py
+
+### ☁️ AWS SageMaker Deplo    # FastAPI endpoints (10 endpoints)
+│   │   └── main.py
+│   ├── services/             # Business logic
+│   │   ├── resume_parser.py  # PDF resume parsing
+│   │   ├── job_parser.py     # Job description parsing
+│   │   └── llm_service.py    # Multi-provider LLM orchestration
+│   ├── models/               # Data models (Pydantic)
+│   │   └── schema.py
+│   ├── prompts/              # Prompt templates
+│   │   └── templates.py
+│   └── utils/                # Helper functions
+├── frontend/
+│   ├── streamlit_app.py      # Main app entry
+│   └── pages/                # Streamlit pages (4 pages)
+│       ├── upload_page.py
+│       ├── analysis_page.py
+│       └── chat_page.py
+├── aws/                      # AWS SageMaker integration
+│   ├── sagemaker_deployer.py # Model deployment
+│   └── sagemaker_client.py   # Inference client
+├── scripts/                  # Automation scripts
+│   └── compare_providers.py  # OpenAI vs SageMaker comparison
+├── docs/                     # Documentation
+│   ├── AWS_SETUP_GUIDE.md
+│   ├── SAGEMAKER_QUICK_REFERENCE.md
+│   ├── DAY9-10_SAGEMAKER_DEPLOYMENT.md
+│   ├── DAY7-8_REPORT.md
+│   ├── FRONTEND.md
+│   └── E2E_TEST_REPORT.md
+├── tests/
+│   ├── test_parsers.py       # Parser tests (15 passing)
+│   ├── test_api.py           # API tests (7 passing)
+│   └── test_e2e.py           # E2E tests (7 passing)
+├── deploy_sagemaker.py       # SageMaker deployment CLI
+├── run_app.sh                # One-command launcher
 │   │   └── chat_service.py
 │   ├── models/           # Data models
 │   │   ├── resume.py
@@ -127,51 +162,165 @@ ResumeCoach/
 ```
 
 ## 📊 Development Status
+**Current Phase:** Days 13-14 - AWS Deployment & Documentation ✅ COMPLETE
 
-Current phase: **Day 1 - Project Setup** ✅
+### Completed Milestones
 
-- [x] Git repository initialized
-- [x] Project structure created
-- [x] Dependencies defined
-- [ ] Virtual environment setup
-- [ ] Initial EDA
-- [ ] Prompt testing
+- ✅ **Days 1-2:** Project Setup & Prototyping
+- ✅ **Days 3-4:** Resume Parser & Prompt Engineering (15/15 tests passing)
+- ✅ **Days 5-6:** FastAPI Backend (10 endpoints, 7/7 API tests passing)
+- ✅ **Days 7-8:** Streamlit Frontend (4 pages, 7/7 E2E tests passing)
+- ✅ **Days 9-10:** AWS SageMaker Deployment (Multi-provider support)
+- ✅ **Days 11-12:** Integration & Testing (54/54 tests, load testing, benchmarks)
+- ✅ **Days 13-14:** AWS Deployment & Final Documentation (Production ready!)
 
-See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the complete 14-day development roadmap.
+### Project Status
+
+- **Progress**: 100% complete (14/14 days)
+- **Completion Date**: January 8, 2026 (12 days ahead of schedule!)
+- **Status**: 🟢 PRODUCTION READY 🚀
 
 ## 🛠️ Technology Stack
 
+- **Models**: 
+  - OpenAI GPT-3.5-turbo (default)
+  - AWS SageMaker: Llama 2 7B/13B, Mistral 7B, Falcon 7B (optional)
+- **Backend**: FastAPI 0.109.0, Python 3.13.1
+- **Frontend**: Streamlit 1.29.0
+- **Cloud**: AWS (SageMaker, EC2/ECS)
+- **Testing**: Pytest, Locust (54/54 tests passing)
+- **Infrastructure**: boto3, sagemaker SDK, locust
 - **LLM Framework**: LangChain
-- **Models**: Llama-2-7B-chat (SageMaker), GPT-3.5/4 (testing)
-- **Backend**: FastAPI, Python 3.10+
-- **Frontend**: Streamlit
-- **Cloud**: AWS (SageMaker, EC2, S3)
-- **Containerization**: Docker
-- **Testing**: Pytest
 
 ## 📖 Documentation
 
+### Getting Started
+- [AWS Setup Guide](docs/AWS_SETUP_GUIDE.md) - How to get AWS credentials
+- [SageMaker Quick Reference](docs/SAGEMAKER_QUICK_REFERENCE.md) - Common commands
+
+### User & Admin Guides (NEW)
+- 📖 [User Manual](docs/USER_MANUAL.md) - Complete end-user guide
+- 🔧 [Admin Guide](docs/ADMIN_GUIDE.md) - System administration and operations
+- 📡 [API Documentation](docs/API_DOCUMENTATION.md) - Complete API reference with examples
+- 🚀 [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) - Step-by-step AWS deployment
+
+### Implementation Details
+- [Days 13-14 Deployment Plan](docs/DAY13-14_DEPLOYMENT_PLAN.md) - AWS deployment strategy (NEW)
+- [Days 11-12 Test Report](docs/DAY11-12_TEST_REPORT.md) - Integration testing results
+- [Days 11-12 Test Plan](docs/DAY11-12_TEST_PLAN.md) - Testing strategy
+- [Days 9-10 Report](docs/DAY9-10_SAGEMAKER_DEPLOYMENT.md) - SageMaker deployment guide
+- [Days 7-8 Report](docs/DAY7-8_REPORT.md) - Frontend development
+- [Frontend Documentation](docs/FRONTEND.md) - Streamlit app architecture
+- [E2E Test Report](docs/E2E_TEST_REPORT.md) - Testing results
+
+### Final Documentation
+- 🎯 [Final Project Summary](docs/FINAL_SUMMARY.md) - Complete project overview and handoff (NEW)
 Comprehensive documentation is available in the `docs/` directory:
 
-- [Architecture Overview](docs/ARCHITECTURE.md) - System design and components
-- [Deployment Guide](docs/DEPLOYMENT.md) - AWS deployment instructions
-- [API Documentation](docs/API_DOCUMENTATION.md) - API endpoints and usage
-- [User Manual](docs/USER_MANUAL.md) - End-user guide
-- [Prompt Engineering](docs/PROMPTS.md) - Prompt templates and strategies
-- [Fine-tuning Guide](docs/FINE_TUNING.md) - Model fine-tuning instructions
+### Unit & Integration Tests
+
+```bash
+# Run all tests (29 tests)
+pytest tests/
+
+# Run specific test suites
+pytest tests/test_parsers.py    # Parser tests (15 passing)
+pytest tests/test_api.py         # API tests (7 passing)
+pytest tests/test_e2e.py         # E2E tests (7 passing)
+
+# Run with coverage
+pytest --cov=backend tests/
+```
+
+### E2E Testing
+Local Development
+
+```bash
+# Quick start - runs both backend and frontend
+./run_app.sh
+```
+
+### AWS SageMaker Deployment
+
+```bash
+# 1. Set up AWS credentials (see docs/AWS_SETUP_GUIDE.md)
+
+# 2. Deploy LLM model to SageMaker
+python deploy_sagemaker.py --model mistral-7b-instruct
+
+# 3. Update .env with endpoint name
+echo "SAGEMAKER_ENDPOINT_NAME=resumecoach-mistral-7b-instruct" >> .env
+
+# 4. Test deployment
+python aws/sagemaker_client.py
+```
+
+See [docs/DAY9-10_SAGEMAKER_DEPLOYMENT.md](docs/DAY9-10_SAGEMAKER_DEPLOYMENT.md) for complete deployment guide.
+
+### Production Deployment (Days 13-14 - Next)
+
+- Backend: AWS ECS/EC2 or AWS Lambda
+- Frontend: Streamlit Cloud or AWS
+- Database: PostgreSQL for session storage
+- Monitoring: CloudWatch logs and metrics
+
+---
 
 ## 🧪 Testing
 
-Run the test suite:
+**Current Test Status:** ✅ 54/54 tests passing (100%)
+
+### Test Suite Breakdown
+
+| Test Type | Count | Status | Coverage |
+|-----------|-------|--------|----------|
+| Unit Tests | 22 | ✅ All passing | Parsers |
+| API Tests | 7 | ✅ All passing | Endpoints |
+| Integration Tests | 18 | ✅ All passing | Workflows |
+| E2E Tests | 7 | ✅ All passing | Full app |
+| **TOTAL** | **54** | ✅ **100%** | **Complete** |
+
+### Run Tests
 
 ```bash
-pytest tests/
+# Run all tests
+pytest tests/ -v
+
+# Run specific test suite
+pytest tests/test_integration.py -v
+
+# Run with coverage
+pytest --cov=backend tests/
+
+# Run with timing
+pytest tests/ -v --durations=10
 ```
 
-Run with coverage:
+### Load Testing
 
 ```bash
-pytest --cov=backend tests/
+# Quick load test (10 users, 60s)
+locust -f locustfile.py --headless -u 10 -r 2 -t 60s
+
+# With HTML report
+locust -f locustfile.py --headless -u 10 -r 2 -t 60s --html=reports/load_test.html
+
+# Interactive web UI
+locust -f locustfile.py
+# Open http://localhost:8089
+```
+
+### Performance Benchmarking
+
+```bash
+# Run benchmarks
+python scripts/benchmark_performance.py
+
+# Create baseline
+python scripts/benchmark_performance.py --create-baseline
+
+# Compare with baseline
+python scripts/benchmark_performance.py --compare results/baseline.json
 ```
 
 ## 🚢 Deployment

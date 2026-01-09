@@ -4,12 +4,13 @@ Supports multiple LLM providers (OpenAI, Anthropic, SageMaker).
 """
 
 import os
+import sys
 import time
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from backend.prompts.templates import PromptTemplates
 from backend.models.schema import (
@@ -19,6 +20,13 @@ from backend.models.schema import (
 
 # Load environment variables
 load_dotenv()
+
+# Import SageMaker client if available
+try:
+    from aws.sagemaker_client import SageMakerClient
+    SAGEMAKER_AVAILABLE = True
+except ImportError:
+    SAGEMAKER_AVAILABLE = False
 
 
 class LLMService:
@@ -43,6 +51,8 @@ class LLMService:
         self.provider = provider
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.llm = None
+        self.sagemaker_client = None
         
         # Initialize the LLM based on provider
         if provider == "openai":
@@ -57,8 +67,25 @@ class LLMService:
             # Can add Anthropic support later
             raise NotImplementedError("Anthropic provider not yet implemented")
         elif provider == "sagemaker":
-            # Can add SageMaker support later
-            raise NotImplementedError("SageMaker provider not yet implemented")
+            if not SAGEMAKER_AVAILABLE:
+                raise RuntimeError(
+                    "SageMaker client not available. "
+                    "Make sure aws module is in the Python path."
+                )
+            
+            endpoint_name = os.getenv("SAGEMAKER_ENDPOINT_NAME")
+            if not endpoint_name:
+                raise ValueError(
+                    "SAGEMAKER_ENDPOINT_NAME environment variable is required "
+                    "when using SageMaker provider"
+                )
+            
+            region = os.getenv("AWS_REGION", "us-east-1")
+            self.model_name = model_name or f"sagemaker-{endpoint_name}"
+            self.sagemaker_client = SageMakerClient(
+                endpoint_name=endpoint_name,
+                region=region
+            )
         else:
             raise ValueError(f"Unknown provider: {provider}")
         
@@ -234,6 +261,19 @@ class LLMService:
         # Format the chat prompt
         prompt = PromptTemplates.format_chat_prompt(question, context)
         
+        # Use provider-specific chat implementation
+        if self.provider == "sagemaker":
+            return self._chat_response_sagemaker(prompt, context, conversation_history)
+        else:
+            return self._chat_response_langchain(prompt, context, conversation_history)
+    
+    def _chat_response_langchain(
+        self,
+        prompt: str,
+        context: Dict[str, Any],
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> str:
+        """Chat response using LangChain (OpenAI/Anthropic)."""
         # Build messages
         messages = [
             SystemMessage(content=PromptTemplates.CHAT_SYSTEM_PROMPT.format(
@@ -248,7 +288,7 @@ class LLMService:
                 if msg['role'] == 'user':
                     messages.append(HumanMessage(content=msg['content']))
                 elif msg['role'] == 'assistant':
-                    messages.append(SystemMessage(content=msg['content']))
+                    messages.append(AIMessage(content=msg['content']))
         
         # Add current question
         messages.append(HumanMessage(content=prompt))
@@ -257,7 +297,88 @@ class LLMService:
         response = self.llm.invoke(messages)
         return response.content
     
+    def _chat_response_sagemaker(
+        self,
+        prompt: str,
+        context: Dict[str, Any],
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> str:
+        """Chat response using SageMaker endpoint."""
+        # Build messages for SageMaker
+        messages = [
+            {
+                "role": "system",
+                "content": PromptTemplates.CHAT_SYSTEM_PROMPT.format(
+                    context_summary=str(context.get('summary', ''))[:500],
+                    report_summary=str(context.get('report_summary', ''))[:500]
+                )
+            }
+        ]
+        
+        # Add conversation history
+        if conversation_history:
+            for msg in conversation_history[-5:]:
+                messages.append({
+                    "role": msg['role'],
+                    "content": msg['content']
+                })
+        
+        # Add current question
+        messages.append({
+            "role": "user",
+            "content": prompt
+        })
+        
+        # Generate response using SageMaker client
+        response = self.sagemaker_client.chat(
+            messages=messages,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature
+        )
+        
+        return response
+    
     # Private helper methods
+    
+    def _invoke_llm(self, messages: List) -> str:
+        """
+        Invoke LLM with provider-specific logic.
+        
+        Args:
+            messages: List of message objects (LangChain or dict format)
+            
+        Returns:
+            Response text
+        """
+        if self.provider == "sagemaker":
+            # Convert LangChain messages to dict format for SageMaker
+            formatted_messages = []
+            for msg in messages:
+                if isinstance(msg, SystemMessage):
+                    formatted_messages.append({
+                        "role": "system",
+                        "content": msg.content
+                    })
+                elif isinstance(msg, HumanMessage):
+                    formatted_messages.append({
+                        "role": "user",
+                        "content": msg.content
+                    })
+                elif isinstance(msg, AIMessage):
+                    formatted_messages.append({
+                        "role": "assistant",
+                        "content": msg.content
+                    })
+            
+            return self.sagemaker_client.chat(
+                messages=formatted_messages,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature
+            )
+        else:
+            # Use LangChain for OpenAI/Anthropic
+            response = self.llm.invoke(messages)
+            return response.content
     
     def _generate_full_report(self, resume: Dict, job: Dict) -> str:
         """Generate full coaching report in one call."""
@@ -266,8 +387,7 @@ class LLMService:
             content=PromptTemplates.format_coaching_report_prompt(resume, job)
         )
         
-        response = self.llm.invoke([system_message, human_message])
-        return response.content
+        return self._invoke_llm([system_message, human_message])
     
     def _generate_fit_assessment(self, resume: Dict, job: Dict) -> str:
         """Generate fit assessment."""
@@ -275,8 +395,7 @@ class LLMService:
         system_message = SystemMessage(content=PromptTemplates.SYSTEM_ANALYZER)
         human_message = HumanMessage(content=prompt)
         
-        response = self.llm.invoke([system_message, human_message])
-        return response.content
+        return self._invoke_llm([system_message, human_message])
     
     def _generate_gap_analysis(self, resume: Dict, job: Dict) -> str:
         """Generate gap analysis."""
@@ -284,8 +403,7 @@ class LLMService:
         system_message = SystemMessage(content=PromptTemplates.SYSTEM_ANALYZER)
         human_message = HumanMessage(content=prompt)
         
-        response = self.llm.invoke([system_message, human_message])
-        return response.content
+        return self._invoke_llm([system_message, human_message])
     
     def _generate_strength_analysis(self, resume: Dict, job: Dict) -> str:
         """Generate strength analysis."""
@@ -293,8 +411,7 @@ class LLMService:
         system_message = SystemMessage(content=PromptTemplates.SYSTEM_ANALYZER)
         human_message = HumanMessage(content=prompt)
         
-        response = self.llm.invoke([system_message, human_message])
-        return response.content
+        return self._invoke_llm([system_message, human_message])
     
     def _generate_resume_optimization(self, resume: Dict, job: Dict) -> str:
         """Generate resume optimization suggestions."""
@@ -307,8 +424,7 @@ class LLMService:
         system_message = SystemMessage(content=PromptTemplates.SYSTEM_COACH)
         human_message = HumanMessage(content=prompt)
         
-        response = self.llm.invoke([system_message, human_message])
-        return response.content
+        return self._invoke_llm([system_message, human_message])
     
     def _generate_interview_prep(self, resume: Dict, job: Dict) -> str:
         """Generate interview preparation tips."""
@@ -321,8 +437,7 @@ class LLMService:
         system_message = SystemMessage(content=PromptTemplates.SYSTEM_COACH)
         human_message = HumanMessage(content=prompt)
         
-        response = self.llm.invoke([system_message, human_message])
-        return response.content
+        return self._invoke_llm([system_message, human_message])
     
     # Response parsing methods
     
