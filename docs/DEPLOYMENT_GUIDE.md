@@ -181,7 +181,7 @@ curl https://api.openai.com/v1/models \
     - Wait 1-2 minutes for instance to start
 
 11. **Get Public IP**:
-    - Note your instance's **Public IPv4 address** (e.g., 54.123.45.67)
+    - Note your instance's **Public IPv4 address** (e.g., 3.238.97.69)
 
 ### Step 4: Set Up Billing Alert
 
@@ -198,7 +198,7 @@ curl https://api.openai.com/v1/models \
 
 ```bash
 # Save your EC2 public IP
-export EC2_IP="54.123.45.67"  # Replace with your actual IP
+export EC2_IP="3.238.97.69"  # Replace with your actual IP
 
 # Connect via SSH
 ssh -i ~/.ssh/resumecoach-key.pem ubuntu@$EC2_IP
@@ -409,7 +409,7 @@ git push origin main
    
    ```toml
    # Paste this configuration
-   API_BASE_URL = "http://54.123.45.67"
+   API_BASE_URL = "http://3.238.97.69"
    # Or with SSL: API_BASE_URL = "https://api.resumecoach.com"
    ```
 
