@@ -261,13 +261,13 @@ if page == "🏠 Home":
         """)
 
 elif page == "📤 Upload Resume":
-    from frontend.pages import upload_page
+    from pages import upload_page
     upload_page.render()
 
 elif page == "📊 Analysis":
-    from frontend.pages import analysis_page
+    from pages import analysis_page
     analysis_page.render()
 
 elif page == "💬 Chat Coach":
-    from frontend.pages import chat_page
+    from pages import chat_page
     chat_page.render()
